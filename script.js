@@ -1,145 +1,155 @@
-const board = document.getElementById('board');
-const cells = [];
-const message = document.getElementById('message');
+const boardEl = document.getElementById('board');
+const messageEl = document.getElementById('message');
 const playerScoreEl = document.getElementById('playerScore');
 const aiScoreEl = document.getElementById('aiScore');
-const tieEl = document.getElementById('tieScore');
+const tieScoreEl = document.getElementById('tieScore');
 
-let currentPlayer = 'X';
 let gameBoard = Array(9).fill(null);
+let currentPlayer = 'X';
 let gameActive = true;
-let difficulty = 'impossible'; // easy | medium | impossible
+let difficulty = 'impossible';
 let playerScore = 0, aiScore = 0, tieScore = 0;
+let cells = [];
+
+const winPatterns = [
+  [0,1,2], [3,4,5], [6,7,8],
+  [0,3,6], [1,4,7], [2,5,8],
+  [0,4,8], [2,4,6]
+];
 
 function createBoard() {
-  board.innerHTML = '';
-  cells.length = 0;
+  boardEl.innerHTML = '';
+  cells = [];
   for (let i = 0; i < 9; i++) {
     const cell = document.createElement('div');
     cell.classList.add('cell');
     cell.dataset.index = i;
-    cell.addEventListener('click', handleClick);
-    board.appendChild(cell);
+    cell.addEventListener('click', handleCellClick);
+    boardEl.appendChild(cell);
     cells.push(cell);
   }
 }
 
-function handleClick(e) {
-  const index = e.target.dataset.index;
+function handleCellClick(e) {
+  const index = parseInt(e.target.dataset.index);
   if (!gameActive || gameBoard[index]) return;
-  gameBoard[index] = currentPlayer;
-  e.target.textContent = currentPlayer;
-  if (checkWin(currentPlayer)) {
-    endGame(false);
-  } else if (gameBoard.every(cell => cell)) {
-    endGame(true);
-  } else {
-    currentPlayer = 'O';
-    message.textContent = "AI is thinking...";
-    setTimeout(aiMove, 600);
+
+  gameBoard[index] = 'X';
+  e.target.textContent = 'X';
+  e.target.classList.add('x');
+
+  const result = getGameResult();
+  if (result) {
+    endGame(result);
+    return;
   }
+
+  currentPlayer = 'O';
+  messageEl.textContent = 'AI o\'ylayapti...';
+  setTimeout(aiTurn, 500 + Math.random() * 500);
 }
 
-function aiMove() {
-  let move;
-  if (difficulty === 'easy') move = easyMove();
-  else if (difficulty === 'medium') move = (Math.random() < 0.7) ? minimaxMove() : easyMove();
-  else move = minimaxMove();
+function aiTurn() {
+  let moveIndex;
+  if (difficulty === 'easy') {
+    moveIndex = getRandomMove();
+  } else if (difficulty === 'medium') {
+    moveIndex = Math.random() < 0.5 ? minimaxMove() : getRandomMove();
+  } else {
+    moveIndex = minimaxMove();
+  }
 
-  gameBoard[move] = 'O';
-  cells[move].textContent = 'O';
-  
-  if (checkWin('O')) {
-    endGame(false);
-  } else if (gameBoard.every(cell => cell)) {
-    endGame(true);
+  gameBoard[moveIndex] = 'O';
+  cells[moveIndex].textContent = 'O';
+  cells[moveIndex].classList.add('o');
+
+  const result = getGameResult();
+  if (result) {
+    endGame(result);
   } else {
     currentPlayer = 'X';
-    message.textContent = "Your turn";
+    messageEl.textContent = "Sizning navbatingiz (X)";
   }
 }
 
 function minimaxMove() {
   let bestScore = -Infinity;
-  let move;
+  let bestMove;
   for (let i = 0; i < 9; i++) {
-    if (!gameBoard[i]) {
+    if (gameBoard[i] === null) {
       gameBoard[i] = 'O';
-      let score = minimax(gameBoard, 0, false);
+      const score = minimax(gameBoard, 0, false);
       gameBoard[i] = null;
       if (score > bestScore) {
         bestScore = score;
-        move = i;
+        bestMove = i;
       }
     }
   }
-  return move;
+  return bestMove;
 }
 
-function minimax(board, depth, isMaximizing) {
-  const result = checkWinner();
-  if (result !== null) {
-    return result === 'O' ? 10 - depth : result === 'X' ? depth - 10 : 0;
-  }
+function minimax(newBoard, depth, isMaximizing) {
+  const result = getGameResult(newBoard);
+  if (result === 'O') return 10 - depth;
+  if (result === 'X') return depth - 10;
+  if (result === 'tie') return 0;
 
   if (isMaximizing) {
-    let best = -Infinity;
+    let maxEval = -Infinity;
     for (let i = 0; i < 9; i++) {
-      if (!board[i]) {
-        board[i] = 'O';
-        best = Math.max(best, minimax(board, depth + 1, false));
-        board[i] = null;
+      if (newBoard[i] === null) {
+        newBoard[i] = 'O';
+        const evalScore = minimax(newBoard, depth + 1, false);
+        newBoard[i] = null;
+        maxEval = Math.max(maxEval, evalScore);
       }
     }
-    return best;
+    return maxEval;
   } else {
-    let best = Infinity;
+    let minEval = Infinity;
     for (let i = 0; i < 9; i++) {
-      if (!board[i]) {
-        board[i] = 'X';
-        best = Math.min(best, minimax(board, depth + 1, true));
-        board[i] = null;
+      if (newBoard[i] === null) {
+        newBoard[i] = 'X';
+        const evalScore = minimax(newBoard, depth + 1, true);
+        newBoard[i] = null;
+        minEval = Math.min(minEval, evalScore);
       }
     }
-    return best;
+    return minEval;
   }
 }
 
-function easyMove() {
-  const empty = gameBoard.map((val, idx) => val === null ? idx : null).filter(val => val !== null);
-  return empty[Math.floor(Math.random() * empty.length)];
+function getRandomMove() {
+  const emptyCells = gameBoard.map((cell, index) => cell === null ? index : null).filter(v => v !== null);
+  return emptyCells[Math.floor(Math.random() * emptyCells.length)];
 }
 
-function checkWin(player) {
-  const wins = [
-    [0,1,2],[3,4,5],[6,7,8],
-    [0,3,6],[1,4,7],[2,5,8],
-    [0,4,8],[2,4,6]
-  ];
-  return wins.some(combo => combo.every(i => gameBoard[i] === player));
-}
-
-function checkWinner() {
-  if (checkWin('O')) return 'O';
-  if (checkWin('X')) return 'X';
-  if (gameBoard.every(cell => cell)) return 'tie';
+function getGameResult(board = gameBoard) {
+  for (let pattern of winPatterns) {
+    const [a, b, c] = pattern;
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+      return board[a];
+    }
+  }
+  if (board.every(cell => cell !== null)) return 'tie';
   return null;
 }
 
-function endGame(tie) {
+function endGame(result) {
   gameActive = false;
-  if (tie) {
-    message.textContent = "It's a Tie!";
-    tieScore++;
-    tieEl.textContent = tieScore;
-  } else if (currentPlayer === 'X') {
-    message.textContent = "🎉 You Win! (Lucky!)";
+  if (result === 'X') {
+    messageEl.textContent = '🎉 Siz yutdingiz!';
     playerScore++;
     playerScoreEl.textContent = playerScore;
-  } else {
-    message.textContent = "AI Wins! Try again";
+  } else if (result === 'O') {
+    messageEl.textContent = '🤖 AI yutdi!';
     aiScore++;
     aiScoreEl.textContent = aiScore;
+  } else {
+    messageEl.textContent = 'Durrang!';
+    tieScore++;
+    tieScoreEl.textContent = tieScore;
   }
 }
 
@@ -147,14 +157,23 @@ function resetGame() {
   gameBoard = Array(9).fill(null);
   currentPlayer = 'X';
   gameActive = true;
-  message.textContent = "Your turn (X)";
+  messageEl.textContent = "Sizning navbatingiz (X)";
   createBoard();
 }
 
-document.getElementById('easyBtn').onclick = () => { difficulty='easy'; resetGame(); document.querySelectorAll('button')[0].classList.add('active'); document.querySelectorAll('button')[1].classList.remove('active'); document.querySelectorAll('button')[2].classList.remove('active'); }
-document.getElementById('mediumBtn').onclick = () => { difficulty='medium'; resetGame(); ... }
-document.getElementById('impossibleBtn').onclick = () => { difficulty='impossible'; resetGame(); ... }
-document.getElementById('resetBtn').onclick = resetGame;
+function setDifficulty(newDiff) {
+  difficulty = newDiff;
+  document.querySelectorAll('.controls button').forEach(btn => btn.classList.remove('active'));
+  document.getElementById(newDiff + 'Btn').classList.add('active');
+  resetGame();
+}
 
+// Event listeners
+document.getElementById('easyBtn').addEventListener('click', () => setDifficulty('easy'));
+document.getElementById('mediumBtn').addEventListener('click', () => setDifficulty('medium'));
+document.getElementById('impossibleBtn').addEventListener('click', () => setDifficulty('impossible'));
+document.getElementById('resetBtn').addEventListener('click', resetGame);
+
+// Initialize
 createBoard();
-message.textContent = "Your turn (X)";
+messageEl.textContent = "Sizning navbatingiz (X)";
